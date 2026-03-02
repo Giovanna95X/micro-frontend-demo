@@ -3,9 +3,20 @@ const { ModuleFederationPlugin } = require('webpack').container;
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const { VueLoaderPlugin } = require('vue-loader');
 
-// 远程模块 URL：本地开发用 localhost，Vercel 部署后替换为实际域名
-const REMOTE_MONITOR_URL = process.env.REMOTE_MONITOR_URL || 'http://localhost:3001';
-const REMOTE_USER_URL = process.env.REMOTE_USER_URL || 'http://localhost:3002';
+// 远程模块 URL：
+//   本地开发: npm run dev 时使用 localhost
+//   Vercel 生产: 自动使用已部署的 Remote URL
+const REMOTE_MONITOR_URL =
+  process.env.REMOTE_MONITOR_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? 'https://remote-monitor.vercel.app'
+    : 'http://localhost:3001');
+
+const REMOTE_USER_URL =
+  process.env.REMOTE_USER_URL ||
+  (process.env.NODE_ENV === 'production'
+    ? 'https://remote-user-sage.vercel.app'
+    : 'http://localhost:3002');
 
 module.exports = (env, argv) => ({
   mode: argv.mode || 'development',
