@@ -1,6 +1,58 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router';
-const router = useRouter();
+import { defineAsyncComponent, ref } from 'vue';
+
+const monitorError = ref<string | null>(null);
+const userError = ref<string | null>(null);
+
+const MonitorDashboard = defineAsyncComponent({
+  loader: () =>
+    import('remoteMonitor/MonitorDashboard').catch((err) => {
+      monitorError.value = `无法加载 remote-monitor 模块。\n请确认 remote-monitor 正在 localhost:3001 运行。\n\n错误详情: ${err.message}`;
+      throw err;
+    }),
+  loadingComponent: {
+    template: `
+      <div class="remote-loading">
+        <div class="loading-header">
+          <div class="skeleton skeleton-title"></div>
+          <div class="skeleton skeleton-btn"></div>
+        </div>
+        <div class="loading-cards">
+          <div v-for="i in 4" :key="i" class="skeleton skeleton-card"></div>
+        </div>
+        <div class="skeleton skeleton-chart"></div>
+        <p class="loading-tip">正在从 remote-monitor 加载组件...</p>
+      </div>
+    `,
+  },
+  errorComponent: { template: '<div></div>' },
+  delay: 200,
+  timeout: 15000,
+});
+
+const UserManagement = defineAsyncComponent({
+  loader: () =>
+    import('remoteUser/UserManagement').catch((err) => {
+      userError.value = `无法加载 remote-user 模块。\n请确认 remote-user 正在 localhost:3002 运行。\n\n错误详情: ${err.message}`;
+      throw err;
+    }),
+  loadingComponent: {
+    template: `
+      <div class="remote-loading">
+        <div class="loading-header">
+          <div class="skeleton skeleton-title"></div>
+          <div class="skeleton skeleton-btn"></div>
+        </div>
+        <div class="skeleton skeleton-table-header"></div>
+        <div v-for="i in 6" :key="i" class="skeleton skeleton-row"></div>
+        <p class="loading-tip">正在从 remote-user 加载组件...</p>
+      </div>
+    `,
+  },
+  errorComponent: { template: '<div></div>' },
+  delay: 200,
+  timeout: 15000,
+});
 </script>
 
 <template>
@@ -31,46 +83,46 @@ const router = useRouter();
             <span class="browser-url">mf-shell.vercel.app</span>
           </div>
           <div class="arch-inner">
-            <!-- Shell -->
             <div class="arch-shell">
-              <div class="arch-app-label">Shell（宿主应用）</div>
-              <div class="arch-app-desc">Vue Router · Pinia · 布局</div>
-              <div class="arch-remotes">
-                <div class="arch-slot active" @click="router.push('/monitor')">
-                  <span class="slot-dot loaded"></span>
-                  <span>MonitorDashboard</span>
-                  <span class="slot-from">← remote-monitor</span>
-                </div>
-                <div class="arch-slot active" @click="router.push('/users')">
-                  <span class="slot-dot loaded"></span>
-                  <span>UserManagement</span>
-                  <span class="slot-from">← remote-user</span>
-                </div>
+              <div class="arch-shell-header">
+                <div class="arch-app-label">Shell（宿主应用）</div>
+                <div class="arch-app-desc">Vue Router · Pinia · 布局</div>
               </div>
-            </div>
-
-            <!-- 箭头 + 远程应用 -->
-            <div class="arch-right">
-              <div class="arch-remote-app">
-                <div class="remote-header">
-                  <span class="remote-badge monitor">Remote</span>
-                  remote-monitor
+              <div class="arch-slots">
+                <!-- MonitorDashboard slot -->
+                <div class="arch-slot-panel">
+                  <div class="slot-bar monitor-bar">
+                    <span class="slot-dot loaded"></span>
+                    <span class="slot-name">MonitorDashboard</span>
+                    <span class="slot-from">← remote-monitor · :3001/remoteEntry.js</span>
+                  </div>
+                  <div class="slot-body">
+                    <div v-if="monitorError" class="error-boundary">
+                      <div class="error-icon">⚠️</div>
+                      <h3>远程模块加载失败</h3>
+                      <pre class="error-msg">{{ monitorError }}</pre>
+                      <p class="error-hint">容错降级：Remote 故障不影响 Shell 正常运行。</p>
+                    </div>
+                    <MonitorDashboard v-else />
+                  </div>
                 </div>
-                <div class="remote-url">:3001/remoteEntry.js</div>
-                <div class="remote-exposes">exposes: MonitorDashboard</div>
-              </div>
-              <div class="arch-arrow">
-                <div class="arrow-line"></div>
-                <div class="arrow-label">Module Federation</div>
-                <div class="arrow-label small">shared: vue · pinia</div>
-              </div>
-              <div class="arch-remote-app">
-                <div class="remote-header">
-                  <span class="remote-badge user">Remote</span>
-                  remote-user
+                <!-- UserManagement slot -->
+                <div class="arch-slot-panel">
+                  <div class="slot-bar user-bar">
+                    <span class="slot-dot user-dot"></span>
+                    <span class="slot-name">UserManagement</span>
+                    <span class="slot-from">← remote-user · :3002/remoteEntry.js</span>
+                  </div>
+                  <div class="slot-body">
+                    <div v-if="userError" class="error-boundary">
+                      <div class="error-icon">⚠️</div>
+                      <h3>远程模块加载失败</h3>
+                      <pre class="error-msg">{{ userError }}</pre>
+                      <p class="error-hint">Shell 宿主应用正常运行，仅该 Remote 模块不可用。</p>
+                    </div>
+                    <UserManagement v-else />
+                  </div>
                 </div>
-                <div class="remote-url">:3002/remoteEntry.js</div>
-                <div class="remote-exposes">exposes: UserManagement</div>
               </div>
             </div>
           </div>
@@ -115,15 +167,6 @@ const router = useRouter();
       </div>
     </div>
 
-    <!-- CTA -->
-    <div class="cta-section">
-      <button class="cta-btn primary" @click="router.push('/monitor')">
-        查看服务监控面板 →
-      </button>
-      <button class="cta-btn secondary" @click="router.push('/users')">
-        查看用户管理 →
-      </button>
-    </div>
   </div>
 </template>
 
@@ -224,72 +267,76 @@ const router = useRouter();
 }
 
 .arch-inner {
-  display: flex;
-  gap: 0;
-  padding: 24px;
-  align-items: stretch;
+  padding: 16px;
 }
 
 .arch-shell {
-  flex: 1;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 16px;
+  overflow: hidden;
+}
+
+.arch-shell-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
 }
 
 .arch-app-label {
   font-size: 13px;
   font-weight: 600;
   color: var(--accent);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .arch-app-desc {
   font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 16px;
 }
 
-.arch-remotes {
+.arch-slots {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
 }
 
-.arch-slot {
+.arch-slot-panel {
+  border-top: 1px solid var(--border);
+}
+
+.arch-slot-panel:first-child {
+  border-top: none;
+}
+
+.slot-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 8px 16px;
   background: var(--bg-primary);
-  border: 1px dashed var(--border);
-  border-radius: 6px;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
   color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition);
 }
 
-.arch-slot.active {
-  border-color: var(--success);
-  border-style: solid;
-}
-
-.arch-slot.active:hover {
-  background: var(--success-dim);
-  color: var(--success);
-}
+.monitor-bar { border-left: 3px solid var(--success); }
+.user-bar { border-left: 3px solid #a855f7; }
 
 .slot-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--text-muted);
   flex-shrink: 0;
+  animation: pulse 2s infinite;
 }
 
 .slot-dot.loaded { background: var(--success); }
+.user-dot { background: #a855f7; }
+
+.slot-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
 
 .slot-from {
   margin-left: auto;
@@ -298,78 +345,8 @@ const router = useRouter();
   font-family: monospace;
 }
 
-.arch-right {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 0 24px;
-  gap: 12px;
-}
-
-.arch-arrow {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-
-.arrow-line {
-  width: 2px;
-  height: 20px;
-  background: linear-gradient(to bottom, var(--accent), transparent);
-}
-
-.arrow-label {
-  font-size: 10px;
-  color: var(--accent);
-  font-weight: 500;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.arrow-label.small { color: var(--text-muted); }
-
-.arch-remote-app {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  min-width: 180px;
-}
-
-.remote-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-}
-
-.remote-badge {
-  font-size: 9px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.remote-badge.monitor { background: var(--accent-dim); color: var(--accent); }
-.remote-badge.user { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
-
-.remote-url {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-family: monospace;
-  margin-bottom: 4px;
-}
-
-.remote-exposes {
-  font-size: 10px;
-  color: var(--success);
-  font-family: monospace;
+.slot-body {
+  padding: 16px;
 }
 
 /* 技术亮点 */
@@ -415,35 +392,83 @@ const router = useRouter();
   color: var(--accent);
 }
 
-/* CTA */
-.cta-section {
+/* 骨架屏 */
+.remote-loading { animation: fadeIn 0.2s ease; }
+
+.loading-header {
   display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-surface) 25%, var(--bg-elevated) 50%, var(--bg-surface) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 6px;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton-title { height: 24px; width: 200px; }
+.skeleton-btn { height: 32px; width: 80px; }
+
+.loading-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
+  margin-bottom: 20px;
 }
 
-.cta-btn {
-  padding: 10px 24px;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 500;
-  transition: all var(--transition);
+.skeleton-card { height: 130px; }
+.skeleton-chart { height: 200px; margin-bottom: 16px; }
+.skeleton-table-header { height: 40px; margin-bottom: 8px; }
+.skeleton-row { height: 52px; margin-bottom: 4px; }
+
+.loading-tip {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 12px;
+  animation: pulse 1.5s infinite;
 }
 
-.cta-btn.primary {
-  background: var(--accent);
-  color: #fff;
+/* 错误边界 */
+.error-boundary {
+  padding: 32px;
+  text-align: center;
 }
 
-.cta-btn.primary:hover { background: var(--accent-hover); }
+.error-icon { font-size: 36px; margin-bottom: 12px; }
 
-.cta-btn.secondary {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
+.error-boundary h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--error);
+  margin-bottom: 12px;
 }
 
-.cta-btn.secondary:hover {
-  border-color: var(--border-hover);
+.error-msg {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
   background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  border-radius: 6px;
+  text-align: left;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.error-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
 }
 </style>
