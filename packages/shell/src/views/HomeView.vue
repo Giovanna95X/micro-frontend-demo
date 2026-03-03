@@ -147,7 +147,7 @@ const UserManagement = defineAsyncComponent({
         <div class="highlight-card">
           <div class="highlight-icon">🛡️</div>
           <h3>SSO 状态同步</h3>
-          <p>Pinia store（页面内同步）+ localStorage（跨 Tab 同步），Remote 模块无需重新登录即可获取认证状态</p>
+          <p>Demo 采用 Pinia + localStorage 模拟；实际工程为 <strong>CAS 协议</strong>——TGC / ST 票据体系 + 父域 SESSIONID + Redis 互信 Session</p>
         </div>
         <div class="highlight-card">
           <div class="highlight-icon">🔄</div>
@@ -163,6 +163,123 @@ const UserManagement = defineAsyncComponent({
           <div class="highlight-icon">🌐</div>
           <h3>跨域解决方案</h3>
           <p>Remote 服务设置 CORS 响应头，Shell 加载跨域 remoteEntry.js 时不受同源策略限制</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- SSO 工程化方案 -->
+    <div class="sso-section">
+      <h2 class="section-title">SSO 工程化方案</h2>
+
+      <!-- 方案对比 -->
+      <div class="sso-compare">
+        <div class="compare-card">
+          <div class="compare-card-label">当前 Demo</div>
+          <div class="compare-rows">
+            <div class="compare-row"><span class="compare-dot accent"></span>Pinia Store 跨模块响应式同步</div>
+            <div class="compare-row"><span class="compare-dot accent"></span>localStorage 跨 Tab 持久化</div>
+            <div class="compare-row warn"><span class="compare-dot warn"></span>纯前端模拟，无服务端参与</div>
+          </div>
+        </div>
+        <div class="compare-vs">VS</div>
+        <div class="compare-card real">
+          <div class="compare-card-label real">实际工程（美团私有云）</div>
+          <div class="compare-rows">
+            <div class="compare-row"><span class="compare-dot success"></span>CAS 协议：TGC + Service Ticket 票据体系</div>
+            <div class="compare-row"><span class="compare-dot success"></span>父域 SESSIONID Cookie 全子域共享</div>
+            <div class="compare-row"><span class="compare-dot success"></span>服务端 Redis 互信 Session，子应用免登录</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAS 时序流程 -->
+      <div class="sso-flow-card">
+        <div class="flow-card-title">CAS 认证时序（初次登录）</div>
+        <div class="flow-steps">
+
+          <div class="flow-step">
+            <div class="step-idx">①</div>
+            <div class="step-main">
+              <div class="step-route">
+                <span class="actor-tag browser">浏览器</span>
+                <span class="step-arr">→</span>
+                <span class="actor-tag app">主应用服务器</span>
+              </div>
+              <div class="step-detail"><code>GET /dashboard</code>，无 SESSIONID Cookie → 302 重定向至 <code>SSO/login?service=主应用URL</code></div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="step-idx">②</div>
+            <div class="step-main">
+              <div class="step-route">
+                <span class="actor-tag browser">浏览器</span>
+                <span class="step-arr">→</span>
+                <span class="actor-tag sso">SSO 服务器</span>
+              </div>
+              <div class="step-detail">用户输入账密，<code>POST /login</code> → 验证通过 → <code>Set-Cookie: TGC</code>（仅 SSO 域有效）→ 生成一次性 ST → <code>302</code> 带 <code>?ticket=ST-xxx</code> 跳回主应用</div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="step-idx">③</div>
+            <div class="step-main">
+              <div class="step-route">
+                <span class="actor-tag app">主应用服务器</span>
+                <span class="step-arr">⇄</span>
+                <span class="actor-tag sso">SSO 服务器</span>
+                <span class="step-note">（服务端 back-channel）</span>
+              </div>
+              <div class="step-detail"><code>GET /validate?ticket=ST-xxx&service=主应用URL</code> → SSO 返回 <strong>username</strong>（非密码）→ ST 立即失效，防止重放攻击</div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="step-idx">④</div>
+            <div class="step-main">
+              <div class="step-route">
+                <span class="actor-tag app">主应用服务器</span>
+                <span class="step-arr">→</span>
+                <span class="actor-tag redis">Redis</span>
+              </div>
+              <div class="step-detail">写入 <code>SESSIONID → &#123; username, roles, ... &#125;</code> → 响应浏览器 <code>Set-Cookie: SESSIONID; Domain=.sankuai.com</code>（父域，全子域自动携带）</div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="step-idx">⑤</div>
+            <div class="step-main">
+              <div class="step-route">
+                <span class="actor-tag browser">浏览器</span>
+                <span class="step-arr">→</span>
+                <span class="actor-tag sub">子应用服务器</span>
+                <span class="step-arr">⇄</span>
+                <span class="actor-tag redis">Redis</span>
+              </div>
+              <div class="step-detail">请求自动携带父域 SESSIONID → 子应用服务器查同一 Redis → 验证通过 → <strong>无需再走 SSO 流程</strong>，直接返回数据</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 关键设计要点 -->
+      <div class="sso-keys">
+        <div class="key-card">
+          <div class="key-title">ST 一次性消费</div>
+          <div class="key-desc">Service Ticket 验证后立即失效，防止 URL 劫持重放攻击</div>
+        </div>
+        <div class="key-card">
+          <div class="key-title">TGC 域隔离</div>
+          <div class="key-desc">TGC Cookie 仅在 SSO 域有效，业务服务器始终无法获取</div>
+        </div>
+        <div class="key-card">
+          <div class="key-title">父域 Cookie 共享</div>
+          <div class="key-desc">SESSIONID 设置在父域，所有子域请求自动携带，无需额外处理</div>
+        </div>
+        <div class="key-card">
+          <div class="key-title">Redis 互信 Session</div>
+          <div class="key-desc">主子应用服务器共用同一 Redis，配置互信后子应用直接读取 Session</div>
         </div>
       </div>
     </div>
@@ -468,6 +585,221 @@ const UserManagement = defineAsyncComponent({
 
 .error-hint {
   font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* SSO 工程化方案 */
+.sso-section {
+  margin-top: 40px;
+}
+
+/* 方案对比 */
+.sso-compare {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin-bottom: 16px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.compare-card {
+  flex: 1;
+  padding: 16px 20px;
+}
+
+.compare-card.real {
+  background: rgba(34, 197, 94, 0.04);
+  border-left: 1px solid var(--border);
+}
+
+.compare-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 12px;
+}
+
+.compare-card-label.real { color: var(--success); }
+
+.compare-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.compare-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.compare-row.warn { color: var(--text-muted); }
+
+.compare-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.compare-dot.accent { background: var(--accent); }
+.compare-dot.success { background: var(--success); }
+.compare-dot.warn { background: #f59e0b; }
+
+.compare-vs {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+/* CAS 时序流程 */
+.sso-flow-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.flow-card-title {
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.flow-steps {
+  padding: 8px 0;
+}
+
+.flow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+
+.flow-step:last-child { border-bottom: none; }
+.flow-step:hover { background: var(--bg-elevated); }
+
+.step-idx {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.step-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-route {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.actor-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.actor-tag.browser { background: var(--bg-elevated); color: var(--text-secondary); border: 1px solid var(--border); }
+.actor-tag.app     { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(59,130,246,0.3); }
+.actor-tag.sso     { background: rgba(245, 158, 11, 0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+.actor-tag.redis   { background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
+.actor-tag.sub     { background: rgba(168, 85, 247, 0.12); color: #a855f7; border: 1px solid rgba(168,85,247,0.3); }
+
+.step-arr {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.step-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.step-detail {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.step-detail code {
+  font-family: monospace;
+  font-size: 11px;
+  background: var(--bg-elevated);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--accent);
+}
+
+.step-detail strong { color: var(--text-primary); font-weight: 600; }
+
+/* 关键设计要点 */
+.sso-keys {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.key-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  transition: border-color var(--transition);
+}
+
+.key-card:hover { border-color: var(--border-hover); }
+
+.key-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.key-desc {
+  font-size: 11px;
   color: var(--text-muted);
   line-height: 1.6;
 }
