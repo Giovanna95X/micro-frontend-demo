@@ -54,6 +54,36 @@ module.exports = (env, argv) => ({
     port: 3001,
     hot: true,
     historyApiFallback: true,
-    headers: { 'Access-Control-Allow-Origin': '*' },
+    // credentials: include 要求明确 origin，不能使用通配符 *
+    headers: {
+      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Credentials': 'true',
+    },
+    // GET /__auth — 子应用服务端用 SESSIONID 向 SSO 验证，演示父域 Cookie 共享效果
+    setupMiddlewares(middlewares, devServer) {
+      const cookieParser = require('cookie-parser');
+      devServer.app.use(cookieParser());
+
+      devServer.app.get('/__auth', async (req, res) => {
+        // 必须在路由层手动设置 CORS 头：devServer.headers 配置由内部中间件注入，
+        // 晚于 devServer.app.get() 注册的路由执行，导致自定义路由的响应缺少这两个头，
+        // 浏览器因 credentials:include + 无 Allow-Credentials 而直接 reject fetch。
+        res.set('Access-Control-Allow-Origin', 'http://localhost:3000');
+        res.set('Access-Control-Allow-Credentials', 'true');
+
+        const sid = req.cookies.SESSIONID;
+        if (!sid) return res.status(401).json({ valid: false, error: 'no session' });
+        try {
+          const ssoRes = await fetch(`http://localhost:4000/api/session/${sid}`);
+          if (!ssoRes.ok) return res.status(401).json({ valid: false, error: 'invalid session' });
+          const data = await ssoRes.json();
+          res.json({ valid: true, username: data.username, role: data.role });
+        } catch {
+          res.status(503).json({ valid: false, error: 'sso unreachable' });
+        }
+      });
+
+      return middlewares;
+    },
   },
 });

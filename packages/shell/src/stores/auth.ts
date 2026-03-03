@@ -3,61 +3,44 @@ import { ref, computed } from 'vue';
 
 export interface User {
   name: string;
-  email: string;
   role: string;
-  avatar: string;
 }
 
 /**
- * SSO 认证 Store
+ * SSO 认证 Store（工程化版）
  *
- * 核心思路（对应简历中"解决跨域、SSO等模块加载工程问题"）：
- * 1. Pinia store 作为同页面内所有微模块的共享状态（通过 MF shared 配置共享 pinia 实例）
- * 2. 同时写入 localStorage，实现跨 tab / 独立运行的 remote 应用也能读取认证状态
- * 3. 监听 storage 事件，支持多 tab 登出同步
+ * 登录流程由服务端 CAS 中间件完成，前端只负责：
+ *   1. 应用初始化时调用 checkSession() 从服务端获取当前用户信息
+ *   2. 登出时调用 logout() 通知服务端删除 Session
+ *
+ * SESSIONID Cookie 由服务端 httpOnly 设置，前端 JS 无法直接读取（安全规范）。
+ * 不再使用 localStorage 模拟，符合实际工程中 SSO 的实现方式。
  */
 export const useAuthStore = defineStore('mf-auth', () => {
-  const MF_TOKEN_KEY = 'mf_auth_token';
-  const MF_USER_KEY = 'mf_auth_user';
+  const user = ref<User | null>(null);
+  const isLoggedIn = computed(() => !!user.value);
 
-  const user = ref<User | null>(
-    JSON.parse(localStorage.getItem(MF_USER_KEY) || 'null')
-  );
-  const token = ref<string | null>(localStorage.getItem(MF_TOKEN_KEY));
-
-  const isLoggedIn = computed(() => !!token.value);
-
-  function login() {
-    const mockUser: User = {
-      name: '于思源',
-      email: 'giovanna.sy.17@gmail.com',
-      role: '管理员',
-      avatar: '于',
-    };
-    const mockToken = `mf_token_${Date.now()}`;
-
-    user.value = mockUser;
-    token.value = mockToken;
-
-    // 写入 localStorage，让独立运行的 Remote 也能读取
-    localStorage.setItem(MF_TOKEN_KEY, mockToken);
-    localStorage.setItem(MF_USER_KEY, JSON.stringify(mockUser));
+  // 从服务端拉取当前 Session 信息（应用启动时调用一次）
+  async function checkSession() {
+    try {
+      const res = await fetch('/__session');
+      if (res.ok) {
+        const data = await res.json();
+        user.value = { name: data.username, role: data.role };
+      } else {
+        user.value = null;
+      }
+    } catch {
+      user.value = null;
+    }
   }
 
+  // 登出：导航至 /__sso-logout，由服务端完成 Session 删除 + Cookie 清除 + 重定向 SSO
+  // 全程服务端处理，避免前端 fetch + window.location 的时序竞争问题
   function logout() {
     user.value = null;
-    token.value = null;
-    localStorage.removeItem(MF_TOKEN_KEY);
-    localStorage.removeItem(MF_USER_KEY);
+    window.location.href = '/__sso-logout';
   }
 
-  // 监听跨 tab 登出
-  window.addEventListener('storage', (e) => {
-    if (e.key === MF_TOKEN_KEY && !e.newValue) {
-      user.value = null;
-      token.value = null;
-    }
-  });
-
-  return { user, token, isLoggedIn, login, logout };
+  return { user, isLoggedIn, checkSession, logout };
 });

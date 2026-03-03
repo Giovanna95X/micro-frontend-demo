@@ -48,6 +48,31 @@ module.exports = (env, argv) => ({
     port: 3002,
     hot: true,
     historyApiFallback: true,
-    headers: { 'Access-Control-Allow-Origin': '*' },
+    headers: {
+      'Access-Control-Allow-Origin': 'http://localhost:3000',
+      'Access-Control-Allow-Credentials': 'true',
+    },
+    setupMiddlewares(middlewares, devServer) {
+      const cookieParser = require('cookie-parser');
+      devServer.app.use(cookieParser());
+
+      devServer.app.get('/__auth', async (req, res) => {
+        res.set('Access-Control-Allow-Origin', 'http://localhost:3000');
+        res.set('Access-Control-Allow-Credentials', 'true');
+
+        const sid = req.cookies.SESSIONID;
+        if (!sid) return res.status(401).json({ valid: false, error: 'no session' });
+        try {
+          const ssoRes = await fetch(`http://localhost:4000/api/session/${sid}`);
+          if (!ssoRes.ok) return res.status(401).json({ valid: false, error: 'invalid session' });
+          const data = await ssoRes.json();
+          res.json({ valid: true, username: data.username, role: data.role });
+        } catch {
+          res.status(503).json({ valid: false, error: 'sso unreachable' });
+        }
+      });
+
+      return middlewares;
+    },
   },
 });

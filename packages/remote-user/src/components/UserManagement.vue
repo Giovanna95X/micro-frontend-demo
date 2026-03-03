@@ -1,5 +1,23 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+
+interface AuthInfo {
+  valid: boolean;
+  username?: string;
+  role?: string;
+  error?: string;
+}
+
+const authInfo = ref<AuthInfo | null>(null);
+
+onMounted(async () => {
+  try {
+    const res = await fetch('http://localhost:3002/__auth', { credentials: 'include' });
+    authInfo.value = await res.json();
+  } catch {
+    authInfo.value = { valid: false, error: 'sso unreachable' };
+  }
+});
 
 interface User {
   id: number;
@@ -72,6 +90,18 @@ function getAvatarColor(id: number) {
 
 <template>
   <div class="um">
+    <!-- SSO 认证标识 -->
+    <div v-if="authInfo" class="sso-bar" :class="authInfo.valid ? 'sso-ok' : 'sso-fail'">
+      <span class="sso-bar-dot"></span>
+      <template v-if="authInfo.valid">
+        Session 验证通过 &nbsp;·&nbsp; 用户：<strong>{{ authInfo.username }}</strong> ({{ authInfo.role }})
+        &nbsp;·&nbsp; SESSIONID Cookie → remote-user:3002 → SSO:4000
+      </template>
+      <template v-else>
+        Session 验证失败：{{ authInfo.error }}
+      </template>
+    </div>
+
     <!-- 头部 -->
     <div class="um-header">
       <div>
@@ -519,4 +549,38 @@ function getAvatarColor(id: number) {
 }
 
 .btn-confirm:hover { background: #2563eb; }
+
+/* SSO 认证标识条 */
+.sso-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin-bottom: 16px;
+}
+
+.sso-bar.sso-ok {
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  color: #86efac;
+}
+
+.sso-bar.sso-fail {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #fca5a5;
+}
+
+.sso-bar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+  animation: pulse 2s infinite;
+}
+
+.sso-bar strong { color: #fff; font-weight: 600; }
 </style>

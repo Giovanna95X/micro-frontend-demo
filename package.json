@@ -3,7 +3,7 @@
   "private": true,
   "workspaces": ["packages/*"],
   "scripts": {
-    "dev": "concurrently -n 'monitor,user,shell' -c 'cyan,green,blue' 'npm run dev -w packages/remote-monitor' 'npm run dev -w packages/remote-user' 'sleep 3 && npm run dev -w packages/shell'",
+    "dev": "concurrently -n 'sso,monitor,user,shell' -c 'yellow,cyan,green,blue' 'npm run dev -w packages/sso-server' 'npm run dev -w packages/remote-monitor' 'npm run dev -w packages/remote-user' 'sleep 3 && npm run dev -w packages/shell'",
     "build:monitor": "npm run build -w packages/remote-monitor",
     "build:user": "npm run build -w packages/remote-user",
     "build:shell": "npm run build -w packages/shell",

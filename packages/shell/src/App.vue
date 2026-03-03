@@ -1,10 +1,15 @@
 <script setup lang="ts">
+import { onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from './stores/auth';
 
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
+
+onMounted(() => {
+  auth.checkSession();
+});
 
 const navItems = [
   { path: '/', name: 'home', label: '架构概览', icon: '⬡' },
@@ -54,21 +59,14 @@ const navItems = [
           <span class="page-title">{{ navItems.find(n => n.path === route.path)?.label || '首页' }}</span>
         </div>
         <div class="topbar-right">
-          <template v-if="auth.isLoggedIn">
-            <div class="user-info">
-              <div class="user-avatar">{{ auth.user?.avatar }}</div>
-              <div class="user-detail">
-                <span class="user-name">{{ auth.user?.name }}</span>
-                <span class="user-role">{{ auth.user?.role }}</span>
-              </div>
+          <div class="user-info" v-if="auth.isLoggedIn">
+            <div class="user-avatar">{{ auth.user?.name?.[0] }}</div>
+            <div class="user-detail">
+              <span class="user-name">{{ auth.user?.name }}</span>
+              <span class="user-role">{{ auth.user?.role }}</span>
             </div>
-            <button class="btn-logout" @click="auth.logout()">登出</button>
-          </template>
-          <template v-else>
-            <button class="btn-login" @click="auth.login()">
-              模拟登录
-            </button>
-          </template>
+          </div>
+          <button class="btn-logout" @click="auth.logout()">登出</button>
         </div>
       </header>
 
