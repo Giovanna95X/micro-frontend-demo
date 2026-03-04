@@ -146,8 +146,8 @@ const UserManagement = defineAsyncComponent({
         </div>
         <div class="highlight-card">
           <div class="highlight-icon">🛡️</div>
-          <h3>SSO 状态同步</h3>
-          <p>Demo 采用 Pinia + localStorage 模拟；实际工程为 <strong>CAS 协议</strong>——TGC / ST 票据体系 + 父域 SESSIONID + Redis 互信 Session</p>
+          <h3>SSO 工程化实现</h3>
+          <p>Demo 实现简化版 <strong>CAS 协议</strong>：独立 SSO Server（:4000）+ TGC / ST 票据 + httpOnly SESSIONID Cookie + 子应用服务端 back-channel 验证，复现真实 SSO 核心链路</p>
         </div>
         <div class="highlight-card">
           <div class="highlight-icon">🔄</div>
@@ -174,11 +174,13 @@ const UserManagement = defineAsyncComponent({
       <!-- 方案对比 -->
       <div class="sso-compare">
         <div class="compare-card">
-          <div class="compare-card-label">当前 Demo</div>
+          <div class="compare-card-label demo">本 Demo 实现（简化版）</div>
           <div class="compare-rows">
-            <div class="compare-row"><span class="compare-dot accent"></span>Pinia Store 跨模块响应式同步</div>
-            <div class="compare-row"><span class="compare-dot accent"></span>localStorage 跨 Tab 持久化</div>
-            <div class="compare-row warn"><span class="compare-dot warn"></span>纯前端模拟，无服务端参与</div>
+            <div class="compare-row"><span class="compare-dot success"></span>独立 SSO Server（Express · :4000）</div>
+            <div class="compare-row"><span class="compare-dot success"></span>TGC + ST 票据体系，ST 10 秒一次性消费</div>
+            <div class="compare-row"><span class="compare-dot success"></span>httpOnly SESSIONID Cookie + 子应用服务端验证</div>
+            <div class="compare-row warn"><span class="compare-dot warn"></span>内存 Map 模拟 Redis，localhost 端口共享模拟父域</div>
+            <div class="compare-row warn"><span class="compare-dot warn"></span>webpack-dev-server 中间件模拟业务服务端</div>
           </div>
         </div>
         <div class="compare-vs">VS</div>
@@ -186,15 +188,16 @@ const UserManagement = defineAsyncComponent({
           <div class="compare-card-label real">实际工程（美团私有云）</div>
           <div class="compare-rows">
             <div class="compare-row"><span class="compare-dot success"></span>CAS 协议：TGC + Service Ticket 票据体系</div>
-            <div class="compare-row"><span class="compare-dot success"></span>父域 SESSIONID Cookie 全子域共享</div>
-            <div class="compare-row"><span class="compare-dot success"></span>服务端 Redis 互信 Session，子应用免登录</div>
+            <div class="compare-row"><span class="compare-dot success"></span>Redis 集群持久化 Session，多服务配置互信</div>
+            <div class="compare-row"><span class="compare-dot success"></span>父域 Cookie（.sankuai.com）全子域自动携带</div>
+            <div class="compare-row"><span class="compare-dot success"></span>真实业务服务端（Spring/Node）+ Nginx 鉴权</div>
           </div>
         </div>
       </div>
 
       <!-- CAS 时序流程 -->
       <div class="sso-flow-card">
-        <div class="flow-card-title">CAS 认证时序（初次登录）</div>
+        <div class="flow-card-title">CAS 认证时序 · 本 Demo 实现（:3000 Shell / :4000 SSO / :3001&amp;:3002 Remote）</div>
         <div class="flow-steps">
 
           <div class="flow-step">
@@ -203,9 +206,10 @@ const UserManagement = defineAsyncComponent({
               <div class="step-route">
                 <span class="actor-tag browser">浏览器</span>
                 <span class="step-arr">→</span>
-                <span class="actor-tag app">主应用服务器</span>
+                <span class="actor-tag app">Shell :3000</span>
+                <span class="step-note">（webpack-dev-server 中间件）</span>
               </div>
-              <div class="step-detail"><code>GET /dashboard</code>，无 SESSIONID Cookie → 302 重定向至 <code>SSO/login?service=主应用URL</code></div>
+              <div class="step-detail"><code>GET /</code>，Accept: text/html，无有效 SESSIONID Cookie → 中间件 302 至 <code>localhost:4000/login?service=http://localhost:3000</code></div>
             </div>
           </div>
 
@@ -215,9 +219,9 @@ const UserManagement = defineAsyncComponent({
               <div class="step-route">
                 <span class="actor-tag browser">浏览器</span>
                 <span class="step-arr">→</span>
-                <span class="actor-tag sso">SSO 服务器</span>
+                <span class="actor-tag sso">SSO :4000</span>
               </div>
-              <div class="step-detail">用户输入账密，<code>POST /login</code> → 验证通过 → <code>Set-Cookie: TGC</code>（仅 SSO 域有效）→ 生成一次性 ST → <code>302</code> 带 <code>?ticket=ST-xxx</code> 跳回主应用</div>
+              <div class="step-detail">用户输入账密，<code>POST /login</code> → 验证通过 → <code>Set-Cookie: TGC</code>（httpOnly，仅 :4000 域）→ 生成一次性 ST（10 秒过期）→ 302 带 <code>?ticket=ST-xxx</code> 跳回 Shell</div>
             </div>
           </div>
 
@@ -225,12 +229,12 @@ const UserManagement = defineAsyncComponent({
             <div class="step-idx">③</div>
             <div class="step-main">
               <div class="step-route">
-                <span class="actor-tag app">主应用服务器</span>
+                <span class="actor-tag app">Shell :3000</span>
                 <span class="step-arr">⇄</span>
-                <span class="actor-tag sso">SSO 服务器</span>
-                <span class="step-note">（服务端 back-channel）</span>
+                <span class="actor-tag sso">SSO :4000</span>
+                <span class="step-note">（服务端 back-channel，浏览器不可见）</span>
               </div>
-              <div class="step-detail"><code>GET /validate?ticket=ST-xxx&service=主应用URL</code> → SSO 返回 <strong>username</strong>（非密码）→ ST 立即失效，防止重放攻击</div>
+              <div class="step-detail"><code>GET /api/validate?ticket=ST-xxx&service=...</code> → SSO 返回 <code>&#123; username, role &#125;</code>（非密码）→ ST 立即从 Store 删除，防止重放攻击</div>
             </div>
           </div>
 
@@ -238,11 +242,13 @@ const UserManagement = defineAsyncComponent({
             <div class="step-idx">④</div>
             <div class="step-main">
               <div class="step-route">
-                <span class="actor-tag app">主应用服务器</span>
+                <span class="actor-tag app">Shell :3000</span>
                 <span class="step-arr">→</span>
-                <span class="actor-tag redis">Redis</span>
+                <span class="actor-tag sso">SSO :4000</span>
+                <span class="step-arr">→</span>
+                <span class="actor-tag browser">浏览器</span>
               </div>
-              <div class="step-detail">写入 <code>SESSIONID → &#123; username, roles, ... &#125;</code> → 响应浏览器 <code>Set-Cookie: SESSIONID; Domain=.sankuai.com</code>（父域，全子域自动携带）</div>
+              <div class="step-detail"><code>POST /api/session</code> 在 SSO 内存 Map 中创建 Session → Shell 响应 <code>Set-Cookie: SESSIONID</code>（httpOnly · localhost，端口无关，:3001/:3002 请求自动携带）→ 302 跳回干净 URL</div>
             </div>
           </div>
 
@@ -252,11 +258,25 @@ const UserManagement = defineAsyncComponent({
               <div class="step-route">
                 <span class="actor-tag browser">浏览器</span>
                 <span class="step-arr">→</span>
-                <span class="actor-tag sub">子应用服务器</span>
-                <span class="step-arr">⇄</span>
-                <span class="actor-tag redis">Redis</span>
+                <span class="actor-tag app">Shell :3000</span>
+                <span class="step-arr">→</span>
+                <span class="actor-tag sso">SSO :4000</span>
               </div>
-              <div class="step-detail">请求自动携带父域 SESSIONID → 子应用服务器查同一 Redis → 验证通过 → <strong>无需再走 SSO 流程</strong>，直接返回数据</div>
+              <div class="step-detail">Vue 应用初始化，<code>GET /__session</code>（携带 SESSIONID）→ Shell 中间件向 SSO <code>GET /api/session/:id</code> 验证 → 返回用户信息，Pinia Store 更新，顶栏显示用户名</div>
+            </div>
+          </div>
+
+          <div class="flow-step">
+            <div class="step-idx">⑥</div>
+            <div class="step-main">
+              <div class="step-route">
+                <span class="actor-tag browser">浏览器</span>
+                <span class="step-arr">→</span>
+                <span class="actor-tag sub">Remote :3001/:3002</span>
+                <span class="step-arr">⇄</span>
+                <span class="actor-tag sso">SSO :4000</span>
+              </div>
+              <div class="step-detail">子应用组件 <code>fetch /__auth, credentials:include</code>（SESSIONID 随请求自动携带）→ Remote devServer 向 SSO 验证 → 返回 <code>&#123; valid, username, role &#125;</code> → 组件顶部显示 SSO 认证标识</div>
             </div>
           </div>
 
@@ -267,19 +287,19 @@ const UserManagement = defineAsyncComponent({
       <div class="sso-keys">
         <div class="key-card">
           <div class="key-title">ST 一次性消费</div>
-          <div class="key-desc">Service Ticket 验证后立即失效，防止 URL 劫持重放攻击</div>
+          <div class="key-desc">验证后立即从内存 Map 删除，防止 URL 劫持重放攻击；Demo 中额外设 10 秒过期定时清理</div>
         </div>
         <div class="key-card">
           <div class="key-title">TGC 域隔离</div>
-          <div class="key-desc">TGC Cookie 仅在 SSO 域有效，业务服务器始终无法获取</div>
+          <div class="key-desc">TGC Cookie 设在 SSO :4000，业务服务器无法读取；SSO 免密登录（再次访问自动签发 ST）与完整登出均依赖此 Cookie</div>
         </div>
         <div class="key-card">
-          <div class="key-title">父域 Cookie 共享</div>
-          <div class="key-desc">SESSIONID 设置在父域，所有子域请求自动携带，无需额外处理</div>
+          <div class="key-title">Cookie 端口共享</div>
+          <div class="key-desc">浏览器 Cookie 按 host 匹配而非 host:port，SESSIONID 设在 localhost 后 :3001/:3002 请求自动携带，模拟生产环境父域共享</div>
         </div>
         <div class="key-card">
-          <div class="key-title">Redis 互信 Session</div>
-          <div class="key-desc">主子应用服务器共用同一 Redis，配置互信后子应用直接读取 Session</div>
+          <div class="key-title">服务端 back-channel 验证</div>
+          <div class="key-desc">ST 验证与 Session 查询均为服务端对服务端调用，前端 JS 全程不接触票据与 Session 原始数据，符合安全规范</div>
         </div>
       </div>
     </div>
@@ -625,6 +645,7 @@ const UserManagement = defineAsyncComponent({
   margin-bottom: 12px;
 }
 
+.compare-card-label.demo { color: var(--accent); }
 .compare-card-label.real { color: var(--success); }
 
 .compare-rows {
